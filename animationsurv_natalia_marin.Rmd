@@ -1,0 +1,97 @@
+---
+title: "Animated Survival Curves"
+author: "Natalia Marín"
+date: "nataliadcdjmarin@gmail.com"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Import your data set
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(readxl)
+datos<-read_excel("Downloads/HC.xlsx")
+```
+
+# Create an estimation using survfit function
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(survival)
+fit<-survfit(Surv(datos$OS, datos$Death) ~ datos$Tumorsize, data = datos)
+
+# datos$OS is the time variable
+# datos$Death indicates 1 if the patient is dead, 0 if he is not (or unknown)
+# datos$Tumorsize is a covariable that indicates the size of tumor (categorical: <=5 or >5)
+```
+
+
+# Create data frame with your estimation
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+risk<-as.vector(fit$n.risk)
+time<-as.vector(fit$time)
+surv<-as.vector(fit$surv)
+n1<- as.integer(fit$strata[1])  #number of patients with tumor <=5
+n2<-as.integer(fit$strata[2])  #number of patients with tumor >5
+grupo<-c(rep(1,n1),rep(2,n2))
+mi_data<-as.data.frame(cbind(time,surv,round(surv,4),grupo,risk))
+
+```
+
+# Create animated plot
+
+*Option 1: using plotly*
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(plotly)
+library(ggplot2)
+library(survminer)
+plot<- ggsurvplot(fit,censor=F,title ="Figura 1. Estimated Survival according to Tumor Size",pval = TRUE,
+          pval.method = T, pval.size=2, surv.median.line="none",conf.int =F,palette = "Dark2", legend.labs =c("Tamaño 1","Tamaño 2"),break.x.by = 10, xlab = "Time",ylab="Estimated survival prob.")
+
+p<-(plot[[1]])
+plotly::ggplotly(p)
+```
+
+
+*2) Using gganimate and gapmider*
+
+```{r 1, echo=TRUE, message=FALSE, warning=FALSE}
+library(gapminder)
+library(gganimate)
+
+a<-ggplot(data=mi_data, aes(x=time, y=surv, group=grupo, color=as.factor(grupo))) +
+    geom_line() +
+    geom_point()+
+    ggtitle("Survival according to tumor size") +
+  theme_grey()+
+  scale_color_brewer(name="Tumor Size",palette="Set1",labels=c("<=5",">5"))+
+    ylab("Estimated Survival Fuction") +
+  scale_y_continuous(limits = c(0.25,1))+
+  annotate(geom="text",x= 10,y=0.3,label="Log Rank p=0.0039",size=3)+
+  transition_reveal(time)+
+  geom_text(mapping=aes(y=V3,label=format(V3)),size=4,hjust=0.5,vjust=1.8)
+
+
+animate(a,duration=30)
+
+
+#if you want to save as a gif:
+#anim_save("animacion-tumor.gif")
+
+
+
+
+#
+
+```
+
+# Add numbers of patients at risk
+```{r 3, echo=FALSE, fig.height=2, fig.width=6, message=FALSE, warning=FALSE}
+ggrisktable(fit,data=datos,risk.table.type = "nrisk_cumevents",legend.title=element_blank(),palette = "Set1",risk.table.title="Number of deaths", fontsize=3,ggtheme=theme_grey())
+```
+
